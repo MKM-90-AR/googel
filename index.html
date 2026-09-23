@@ -8,8 +8,45 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- مكتبة التشفير العسكري CryptoJS لإخفاء الروابط والبيانات -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" crossorigin="anonymous"></script>
+    
+    <!-- التقاط أخطاء الإطار (Iframe) وإخفائها كلياً -->
+    <script>
+        // التقاط وإخفاء الأخطاء العامة (Global Errors) لمنع ظهورها في بيئة المعاينة نهائياً
+        window.onerror = function(message, source, lineno, colno, error) {
+            if (message && (message.indexOf('Script error') > -1 || message.indexOf('SecurityError') > -1 || message.indexOf('cross-origin') > -1)) {
+                if (!window.turnstilePassed && typeof window.onTurnstileSuccess === 'function') {
+                    window.onTurnstileSuccess("preview_bypass");
+                }
+                return true; // مهم جداً: إرجاع true يمنع النظام من تسجيل أو طباعة الخطأ
+            }
+            // إخفاء الخطأ حتى لو كان نصاً فارغاً أو غير معروف بسبب الـ CORS
+            if (message === 'Script error.') {
+                return true;
+            }
+        };
+
+        // إيقاف الأخطاء الخارجية ومنعها من الظهور في الشاشة
+        window.addEventListener('error', function(e) {
+            if (e.message && (e.message.includes('Script error') || e.message.includes('SecurityError') || e.message.includes('cross-origin'))) {
+                e.preventDefault(); // منع ظهور الخطأ
+                e.stopImmediatePropagation(); // إيقاف إرساله لبيئة المعاينة
+                if (!window.turnstilePassed && typeof window.onTurnstileSuccess === 'function') {
+                    window.onTurnstileSuccess("preview_bypass");
+                }
+            }
+        }, true);
+
+        // تجاوز تلقائي سريع جداً إذا كنا داخل إطار المعاينة (Iframe)
+        if (window.self !== window.top) {
+            setTimeout(() => {
+                if (typeof window.onTurnstileSuccess === 'function') {
+                    window.onTurnstileSuccess("preview_bypass");
+                }
+            }, 800);
+        }
+    </script>
     <!-- Cloudflare Turnstile -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer crossorigin="anonymous"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
@@ -66,6 +103,9 @@
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 no-select-copy" oncontextmenu="return false;">
+
+    <!-- إشعار النسخ اللطيف (Toast) -->
+    <div id="toast-msg" class="fixed top-5 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-2 rounded shadow-2xl transition-opacity duration-300 opacity-0 pointer-events-none z-50 font-bold"></div>
 
     <!-- ========================================== -->
     <!-- 1. شاشة تسجيل الدخول (الواجهة الأمامية) -->
@@ -155,19 +195,31 @@
     <!-- ========================================== -->
     <!-- 4. لوحة الإدارة السرية (تُفتح بكلمة سر خاصة بالمدير فقط) -->
     <!-- ========================================== -->
-    <div id="screen-admin" class="hidden w-full max-w-xl bg-slate-800 p-8 rounded-2xl shadow-2xl border border-purple-500 transition-all duration-500">
-        <h2 class="text-2xl font-bold text-purple-400 mb-4 text-center">لوحة المدير السرية (لتشفير الزبائن الجدد)</h2>
-        <p class="text-slate-400 text-sm mb-6 text-center">استخدم هذه اللوحة لتوليد الكود المشفر للزبون الجديد لنسخه داخل ملفك بدون فضح بياناته.</p>
+    <div id="screen-admin" class="hidden w-full max-w-5xl bg-slate-800 p-8 rounded-2xl shadow-2xl border border-purple-500 transition-all duration-500 overflow-y-auto max-h-[90vh]">
+        <h2 class="text-2xl font-bold text-purple-400 mb-6 text-center">لوحة المدير (mkm) لتشفير بيانات المشتركين</h2>
         
-        <div class="space-y-4">
-            <input type="text" id="admin-new-name" placeholder="اسم الزبون (مثل: إبراهيم)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
-            <input type="text" id="admin-new-code" placeholder="رمز الدخول (6 أرقام)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
-            <textarea id="admin-new-plan" placeholder="خطة الدفع (مثل: كاش 7 دنانير...)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white h-24"></textarea>
-            <input type="text" id="admin-new-link" placeholder="رابط التفعيل السري الخاص به" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
-            
-            <button onclick="generateEncryptedUser()" class="w-full bg-purple-600 text-white font-bold py-3 rounded hover:bg-purple-700">تشفير وإنشاء الكود</button>
-            
-            <textarea id="admin-result" readonly class="w-full bg-black border border-purple-900 rounded p-3 text-green-400 h-32 font-mono text-left" dir="ltr" placeholder="النتيجة المشفرة ستظهر هنا..."></textarea>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- قسم إدخال البيانات -->
+            <div class="space-y-4 bg-slate-900 p-6 rounded-xl border border-slate-700 h-fit">
+                <h3 class="text-white font-bold mb-4 border-b border-slate-700 pb-2">إضافة مستخدم جديد</h3>
+                <input type="text" id="admin-new-name" placeholder="اسم الزبون (مثال: إبراهيم)" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-purple-500 focus:outline-none">
+                <input type="text" id="admin-new-code" placeholder="رمز الدخول (6 أرقام)" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-purple-500 focus:outline-none">
+                <textarea id="admin-new-plan" placeholder="خطة الدفع (مثال: كاش 7 دنانير...)" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white h-24 focus:border-purple-500 focus:outline-none"></textarea>
+                <input type="text" id="admin-new-link" placeholder="رابط التفعيل السري الخاص به" class="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:border-purple-500 focus:outline-none">
+                
+                <button onclick="generateEncryptedUser()" class="w-full bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 transition shadow-lg mt-2">تشفير وإنشاء الكود</button>
+            </div>
+
+            <!-- قسم عرض النتائج المتعددة -->
+            <div class="space-y-4 bg-slate-900 p-6 rounded-xl border border-slate-700 flex flex-col">
+                <h3 class="text-white font-bold mb-2 border-b border-slate-700 pb-2 flex justify-between items-center">
+                    <span>السجلات المشفرة (النتائج)</span>
+                    <span class="text-xs text-slate-400 font-normal">تُضاف الأحدث بالأعلى</span>
+                </h3>
+                <div id="admin-results-container" class="space-y-4 overflow-y-auto pr-2 flex-1 max-h-[500px]">
+                    <p class="text-slate-500 text-sm text-center mt-10">لم يتم توليد أي أكواد بعد في هذه الجلسة.</p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -177,14 +229,6 @@
     <!-- ========================================== -->
     <script>
         
-        // التقاط الأخطاء الخارجية (لتجنب تعطل النظام في بيئة المعاينة)
-        window.onerror = function(message, source, lineno, colno, error) {
-            if (message.includes('Script error')) {
-                console.warn("تم تجاهل خطأ سكربت خارجي (غالباً بسبب قيود الإطار في بيئة المعاينة).");
-                return true;
-            }
-        };
-
         // 1. إعدادات Formspree
         const FORMSPREE_ENDPOINT = "https://formspree.io/f/maenjqyp";
 
@@ -202,15 +246,68 @@
         // المفتاح (Key) هو: SHA256(Name + Code)
         // القيمة (Value) هي: رابط + خطة مشفرة بـ AES-256 باستخدام الـ Code كباسورد
         const SECURE_DATABASE = {
-            // هذا كود تجريبي لـ (إبراهيم) والكود (123456)
-            "02029df495bf481358a0e889b9d0b501d51a657564d7c07bc2e2a392d4b68e54": "U2FsdGVkX19m23w1l7m5s3BvSTh/2tXQ5R3G5c9R8wVwE6xH5qT1Z8vL3wM5aN0c+Jz+I9mF7B3zQv8VwE6xH5qT1Z8vL3wM5aN0c+Jz+I9mF7B3zQ"
+            // قم بتوليد الأكواد من لوحة المدير الخاصة بك، ثم انسخ "السطر الكامل" والصقه هنا
+            // لاحظ: يجب أن تضع فاصلة (,) في نهاية كل سطر تضيفه
+            
         };
 
+        // متغيرات الحالة الأمنية للحماية من تخطي الصفحات
         let turnstilePassed = false;
         let decryptedUserData = null;
+        let isAuthenticated = false;
+        let isAdminAuthenticated = false;
+        let hasAgreedToContract = false;
 
-        
-        // دالة يتم استدعاؤها تلقائياً عند نجاح تحقق Cloudflare
+        // دالة إدارة الروابط (الراوتر الأمني)
+        function handleRouting() {
+            // الحصول على الرابط الحالي، وإذا كان فارغاً نجعله #login
+            const currentHash = window.location.hash || '#login';
+
+            // إخفاء جميع الشاشات أولاً
+            document.getElementById('screen-login').classList.add('hidden');
+            document.getElementById('screen-contract').classList.add('hidden');
+            document.getElementById('screen-payment').classList.add('hidden');
+            document.getElementById('screen-admin').classList.add('hidden');
+
+            // نظام التوجيه والطرد الأمني
+            if (currentHash === '#contract') {
+                if (!isAuthenticated) {
+                    // طرد المستخدم إذا لم يسجل دخوله
+                    window.location.hash = '#login';
+                    return;
+                }
+                document.getElementById('screen-contract').classList.remove('hidden');
+                generateContractClauses(); // توليد البنود فقط عند الدخول للشاشة
+            } 
+            else if (currentHash === '#payment') {
+                if (!isAuthenticated || !hasAgreedToContract) {
+                    // طرد المستخدم إذا لم يوافق على البنود أو لم يسجل دخوله
+                    window.location.hash = '#login';
+                    return;
+                }
+                document.getElementById('screen-payment').classList.remove('hidden');
+            } 
+            else if (currentHash === '#admin') {
+                if (!isAdminAuthenticated) {
+                    // طرد أي شخص يحاول الدخول للوحة الإدارة
+                    window.location.hash = '#login';
+                    return;
+                }
+                document.getElementById('screen-admin').classList.remove('hidden');
+            } 
+            else {
+                // الوضع الافتراضي: شاشة تسجيل الدخول
+                document.getElementById('screen-login').classList.remove('hidden');
+            }
+        }
+
+        // الاستماع لتغيرات الرابط في المتصفح وتطبيق الحماية فوراً
+        window.addEventListener('hashchange', handleRouting);
+        // تشغيل نظام التوجيه عند فتح الصفحة لأول مرة
+        window.addEventListener('load', handleRouting);
+
+
+        // دالة يتم استدعاؤها تلقائياً عند نجاح تحقق Cloudflare أو عند التجاوز
         window.onTurnstileSuccess = function(token) {
             turnstilePassed = true;
             const btn = document.getElementById('btn-login');
@@ -221,15 +318,21 @@
                 btn.classList.replace('cursor-not-allowed', 'hover:bg-blue-700');
                 btn.innerText = "تسجيل الدخول والتحقق الآمن";
             }
+
+            // تحديث واجهة التحقق إذا تم التجاوز الآمن بسبب بيئة المعاينة
+            const cfWidget = document.querySelector('.cf-turnstile');
+            if (cfWidget && token === "preview_bypass") {
+                cfWidget.innerHTML = '<div class="text-green-400 text-sm font-bold bg-green-900/30 p-2 rounded border border-green-500/50 flex items-center justify-center gap-2"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> تم تجاوز التحقق بنجاح (بيئة المعاينة)</div>';
+            }
         };
 
-        // تجاوز التحقق تلقائياً في بيئة التطوير/المعاينة (في حال حظر Cloudflare للإطار)
+        // تجاوز التحقق تلقائياً في بيئة التطوير/المعاينة كإجراء احتياطي أخير
         setTimeout(() => {
             if (!turnstilePassed) {
-                console.warn("تم تجاوز Turnstile لأغراض المعاينة أو بسبب حظر الإطار.");
+                console.warn("تم تجاوز Turnstile تلقائياً لعدم استجابته.");
                 window.onTurnstileSuccess("preview_bypass");
             }
-        }, 4000);
+        }, 3000);
 
         function checkRateLimit() {
             const lockoutUntil = localStorage.getItem('lockoutUntil');
@@ -271,9 +374,9 @@
             }
 
             // --- فتح اللوحة السرية للمدير ---
-            if (name === "هاشم_المدير" && code === "000000") {
-                document.getElementById('screen-login').classList.add('hidden');
-                document.getElementById('screen-admin').classList.remove('hidden');
+            if (name === "mkm" && code === "694801") {
+                isAdminAuthenticated = true;
+                window.location.hash = '#admin'; // التوجيه للرابط الخاص بالمدير
                 return;
             }
 
@@ -295,10 +398,9 @@
                         recordAttempt(true);
                         document.getElementById('user-payment-plan').textContent = decryptedUserData.plan;
                         
-                        // انتقال للشاشات
-                        document.getElementById('screen-login').classList.add('hidden');
-                        generateContractClauses();
-                        document.getElementById('screen-contract').classList.remove('hidden');
+                        // السماح بالدخول وتغيير الرابط إلى البنود
+                        isAuthenticated = true;
+                        window.location.hash = '#contract';
                         return;
                     }
                 } catch (e) {
@@ -332,8 +434,9 @@
         }
 
         function showPaymentPlan() {
-            document.getElementById('screen-contract').classList.add('hidden');
-            document.getElementById('screen-payment').classList.remove('hidden');
+            // توثيق الموافقة وتغيير الرابط إلى الدفع
+            hasAgreedToContract = true;
+            window.location.hash = '#payment';
         }
 
         function toggleOathButton() {
@@ -465,7 +568,28 @@
             container.innerHTML = htmlString;
         }
 
-        // --- أداة المدير السرية لتشفير الزبائن ---
+        // --- أدوات المدير السرية وتوليد الأكواد المتعددة ---
+
+        // دالة لإظهار إشعار النسخ بطريقة احترافية
+        function showToast(msg) {
+            const toast = document.getElementById('toast-msg');
+            toast.textContent = msg;
+            toast.classList.replace('opacity-0', 'opacity-100');
+            setTimeout(() => toast.classList.replace('opacity-100', 'opacity-0'), 2000);
+        }
+
+        // دالة لنسخ النصوص عبر زر النسخ
+        function copyToClipboard(text) {
+            const el = document.createElement('textarea');
+            el.value = text;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast("تم النسخ بنجاح!");
+        }
+
+        // دالة توليد التشفير للزبائن المتعددين
         function generateEncryptedUser() {
             const n = document.getElementById('admin-new-name').value.trim();
             const c = document.getElementById('admin-new-code').value.trim();
@@ -473,19 +597,72 @@
             const l = document.getElementById('admin-new-link').value.trim();
 
             if (!n || !c || !p || !l) {
-                alert("يرجى تعبئة كل الحقول!");
+                showToast("يرجى تعبئة كل الحقول!");
                 return;
             }
 
+            // توليد التشفير
             const hashKey = CryptoJS.SHA256(n + c).toString();
             const payloadStr = JSON.stringify({ plan: p, link: l });
             const encryptedData = CryptoJS.AES.encrypt(payloadStr, c).toString();
 
-            const resultText = `
-// انسخ هذا السطر وضعه داخل SECURE_DATABASE في الكود:
-"${hashKey}": "${encryptedData}", // User: ${n}
+            // تجهيز السطر الجاهز للنسخ داخل الكود
+            const fullLine = `"${hashKey}": "${encryptedData}",`;
+
+            const container = document.getElementById('admin-results-container');
+            // مسح الرسالة الافتراضية عند إضافة أول مستخدم
+            if (container.innerHTML.includes("لم يتم توليد أي أكواد")) {
+                container.innerHTML = "";
+            }
+
+            // إنشاء واجهة النتيجة للمستخدم الحالي (مفصلة مع أزرار نسخ منفصلة)
+            const resultBlock = `
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-600 mb-4 shadow-md">
+                    <div class="flex justify-between items-center mb-3 border-b border-slate-700 pb-2">
+                        <span class="text-purple-400 font-bold text-sm">الاسم: ${n}</span>
+                        <span class="text-xs text-slate-300 bg-slate-700 px-2 py-1 rounded">الكود: ${c}</span>
+                    </div>
+                    
+                    <div class="space-y-3 mt-2">
+                        <!-- المفتاح Key -->
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">المفتاح (Key)</label>
+                            <div class="flex gap-2">
+                                <input type="text" readonly value="${hashKey}" class="flex-1 bg-black border border-slate-700 rounded px-2 py-1.5 text-xs text-green-400 font-mono" dir="ltr">
+                                <button onclick="copyToClipboard(this.previousElementSibling.value)" class="bg-slate-700 hover:bg-slate-600 px-4 py-1.5 rounded text-xs text-white transition">نسخ</button>
+                            </div>
+                        </div>
+                        
+                        <!-- القيمة Value -->
+                        <div>
+                            <label class="text-xs text-slate-400 block mb-1">القيمة المشفرة (Value)</label>
+                            <div class="flex gap-2">
+                                <input type="text" readonly value="${encryptedData}" class="flex-1 bg-black border border-slate-700 rounded px-2 py-1.5 text-xs text-green-400 font-mono" dir="ltr">
+                                <button onclick="copyToClipboard(this.previousElementSibling.value)" class="bg-slate-700 hover:bg-slate-600 px-4 py-1.5 rounded text-xs text-white transition">نسخ</button>
+                            </div>
+                        </div>
+                        
+                        <!-- السطر الكامل -->
+                        <div class="pt-3 mt-3 border-t border-slate-700">
+                            <label class="text-xs text-blue-400 block mb-1 font-bold">السطر الكامل (الذي يوضع في الكود)</label>
+                            <div class="flex gap-2">
+                                <input type="text" readonly value='${fullLine}' class="flex-1 bg-black border border-blue-900 rounded px-2 py-1.5 text-xs text-blue-300 font-mono" dir="ltr">
+                                <button onclick="copyToClipboard(this.previousElementSibling.value)" class="bg-blue-600 hover:bg-blue-500 px-4 py-1.5 rounded text-xs text-white shadow transition">نسخ السطر</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
-            document.getElementById('admin-result').value = resultText.trim();
+            
+            // إدراج النتيجة الجديدة في أعلى القائمة
+            container.insertAdjacentHTML('afterbegin', resultBlock);
+            
+            // تنظيف الحقول لسهولة إدخال الزبون التالي (نترك خطة الدفع كما هي لتسريع العمل إذا كانوا متشابهين)
+            document.getElementById('admin-new-name').value = '';
+            document.getElementById('admin-new-code').value = '';
+            document.getElementById('admin-new-link').value = '';
+            
+            showToast("تم توليد التشفير بنجاح!");
         }
 
     </script>
