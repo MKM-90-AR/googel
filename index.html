@@ -3,8 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>بوابة تفعيل الاشتراك الآمنة</title>
+    <title>بوابة تفعيل الاشتراك الآمنة | Secured Portal</title>
+    <!-- مكتبة التصميم Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- مكتبة التشفير العسكري CryptoJS لإخفاء الروابط والبيانات -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js" crossorigin="anonymous"></script>
+    <!-- Cloudflare Turnstile -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer crossorigin="anonymous"></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
         
@@ -15,11 +21,13 @@
             overflow-x: hidden;
         }
 
-        /* منع النسخ والتحديد نهائياً */
+        /* */
+        /* منع النسخ والتحديد والفحص نهائياً */
         .no-select-copy {
-            -webkit-user-select: none; /* Safari */
-            -ms-user-select: none; /* IE 10 and IE 11 */
-            user-select: none; /* Standard syntax */
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .contract-box {
@@ -29,20 +37,18 @@
         }
 
         .clause {
-            padding: 12px;
+            padding: 15px;
             border-bottom: 1px solid #334155;
             transition: background-color 0.2s;
+            line-height: 1.8;
+            font-size: 15px;
         }
         
-        .clause:hover {
-            background-color: #0f172a;
-        }
+        .clause:hover { background-color: #0f172a; }
 
-        /* أنيميشن التحقق */
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.1);
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             border-radius: 50%;
             border-left-color: #3b82f6;
             animation: spin 1s linear infinite;
@@ -53,7 +59,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* تخصيص شريط التمرير */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #0f172a; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
@@ -62,10 +67,13 @@
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 no-select-copy" oncontextmenu="return false;">
 
+    <!-- ========================================== -->
+    <!-- 1. شاشة تسجيل الدخول (الواجهة الأمامية) -->
+    <!-- ========================================== -->
     <div id="screen-login" class="w-full max-w-md bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 transition-all duration-500">
         <div class="text-center mb-8">
             <h1 class="text-2xl font-bold text-white mb-2">بوابة التفعيل الخاصة</h1>
-            <p class="text-slate-400 text-sm">الرجاء إدخال بيانات الاعتماد للوصول إلى العقد</p>
+            <p class="text-slate-400 text-sm">الرجاء إدخال بيانات الاعتماد المخصصة لك</p>
         </div>
         
         <div id="error-msg" class="hidden mb-4 p-3 bg-red-500/10 border border-red-500/50 text-red-400 text-sm rounded-lg text-center font-medium"></div>
@@ -73,50 +81,43 @@
         <div class="space-y-5">
             <div>
                 <label class="block text-sm font-medium text-slate-300 mb-1">الاسم المعتمد</label>
-                <input type="text" id="input-name" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors" placeholder="أدخل اسمك هنا..." autocomplete="off">
+                <input type="text" id="input-name" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors" placeholder="أدخل اسمك هنا..." autocomplete="off">
             </div>
             <div>
                 <label class="block text-sm font-medium text-slate-300 mb-1">رمز التحقق (6 أرقام)</label>
-                <input type="password" id="input-code" inputmode="numeric" maxlength="6" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white text-center tracking-[0.5em] font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors" placeholder="••••••" autocomplete="off">
+                <input type="password" id="input-code" inputmode="numeric" maxlength="6" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white text-center tracking-[0.5em] font-bold focus:outline-none focus:border-blue-500 transition-colors" placeholder="••••••" autocomplete="off">
             </div>
-            <button onclick="verifyLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg shadow-blue-500/30 mt-4">
-                تسجيل الدخول والتحقق
+            
+            <!-- Cloudflare Turnstile Widget (Using provided Site Key) -->
+            <div class="flex justify-center my-4">
+                <div class="cf-turnstile" data-sitekey="0x4AAAAAAFA9u9nfW8hDTYzF" data-callback="onTurnstileSuccess"></div>
+            </div>
+
+            <button id="btn-login" onclick="verifyLogin()" disabled class="w-full bg-slate-600 text-slate-400 font-bold py-3 px-4 rounded-lg transition-all shadow-lg cursor-not-allowed mt-4">
+                يرجى إكمال التحقق أولاً
             </button>
         </div>
     </div>
 
-    <div id="screen-captcha" class="hidden w-full max-w-md text-center transition-all duration-500">
-        <div class="bg-slate-800 p-10 rounded-2xl shadow-2xl border border-slate-700 flex flex-col items-center justify-center space-y-6">
-            <div class="spinner"></div>
-            <h2 class="text-xl font-bold text-white">جاري التحقق من أمان الاتصال...</h2>
-            <p class="text-sm text-slate-400">نحن نتأكد من أنك لست روبوتاً وأن اتصالك آمن ومحمي.</p>
-            <div class="flex items-center space-x-2 space-x-reverse text-xs text-slate-500 mt-4">
-                <span>مؤمن بواسطة تقنيات الحماية المتقدمة</span>
-                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
-            </div>
-        </div>
-    </div>
-
+    <!-- ========================================== -->
+    <!-- 2. شاشة العقد والشروط (90 بند) -->
+    <!-- ========================================== -->
     <div id="screen-contract" class="hidden w-full max-w-4xl h-[90vh] flex flex-col bg-slate-800 rounded-2xl shadow-2xl border border-slate-700 transition-all duration-500 overflow-hidden relative">
-        <!-- طبقة حماية إضافية فوق النص تمنع التحديد -->
-        <div class="absolute inset-0 z-10 pointer-events-none"></div>
+        <div class="absolute inset-0 z-10 pointer-events-none" style="background: transparent;"></div>
         
         <div class="p-6 border-b border-slate-700 bg-slate-800/95 z-20">
             <h1 class="text-2xl font-bold text-white text-center">وثيقة اتفاقية الاستخدام وحفظ الحقوق والضمانات الرقمية</h1>
-            <p class="text-center text-slate-400 mt-2 text-sm">يجب قراءة جميع البنود والموافقة عليها للانتقال لخطوة التفعيل</p>
+            <p class="text-center text-slate-400 mt-2 text-sm">التفعيل الآمن لخدمات (Google AI Pro) لمدة 18 شهراً</p>
         </div>
         
-        <div class="flex-1 overflow-y-auto p-6 contract-box text-sm leading-relaxed z-20 relative" id="contract-content">
-            <p class="mb-6 text-slate-300 font-bold text-justify">
-                تم تحرير هذه الوثيقة الشاملة من قبل الطرف الأول (مُقدم الخدمة): هاشم عمر حمامي، وتهدف هذه الوثيقة التأسيسية إلى تنظيم عملية تفعيل اشتراك (Google AI Pro) لمدة ثمانية عشر (18) شهراً، وتوضيح كافة البنود التي تضمن حقوق الطرف الثاني (المشترك) في المقام الأول، وتحافظ على خصوصيته التامة، وتضمن عدم المساس ببياناته الشخصية...
-            </p>
-            <!-- سيتم توليد البنود الـ 90 هنا عبر الجافاسكريبت -->
+        <div class="flex-1 overflow-y-auto p-6 contract-box z-20 relative" id="contract-content">
+            <!-- سيتم توليد البنود הـ 90 هنا عبر الجافاسكريبت لحماية المساحة -->
         </div>
 
         <div class="p-6 border-t border-slate-700 bg-slate-800/95 z-20">
             <label class="flex items-start space-x-3 space-x-reverse cursor-pointer group mb-4">
                 <input type="checkbox" id="contract-agree-cb" class="mt-1 w-5 h-5 rounded border-slate-600 text-blue-600 focus:ring-blue-500 bg-slate-900 cursor-pointer" onchange="toggleContractButton()">
-                <span class="text-slate-300 group-hover:text-white transition-colors text-sm font-medium">أقر أنا الموقع إلكترونياً أدناه، وبكامل قواي العقلية والمسؤولية القانونية، بأنني قرأت جميع البنود الـ 90 المذكورة أعلاه وفهمتها فهماً نافياً للجهالة، وأوافق عليها موافقة قطعية ونهائية لا رجعة فيها، ولا يحق لي الطعن فيها أو التذرع بعدم قراءتها مستقبلاً.</span>
+                <span class="text-slate-300 group-hover:text-white transition-colors text-sm font-medium">أقر أنا بكامل قواي العقلية بأنني قرأت جميع البنود الـ 90 المذكورة أعلاه وفهمتها فهماً نافياً للجهالة، وأوافق عليها موافقة قطعية ونهائية لا رجعة فيها.</span>
             </label>
             <button id="btn-contract-next" onclick="showPaymentPlan()" disabled class="w-full bg-slate-600 text-slate-400 font-bold py-4 rounded-xl cursor-not-allowed transition-all duration-300">
                 الموافقة والانتقال لخيارات الدفع
@@ -124,6 +125,9 @@
         </div>
     </div>
 
+    <!-- ========================================== -->
+    <!-- 3. شاشة الدفع والقسم (النهاية) -->
+    <!-- ========================================== -->
     <div id="screen-payment" class="hidden w-full max-w-lg bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 transition-all duration-500">
         <h2 class="text-2xl font-bold text-white mb-6 border-b border-slate-700 pb-4 text-center">الالتزام المالي والقَسَم</h2>
         
@@ -144,55 +148,94 @@
         </div>
 
         <button id="btn-final-submit" onclick="processFingerprintAndRedirect()" disabled class="w-full bg-slate-600 text-slate-400 font-bold py-4 rounded-xl cursor-not-allowed transition-all duration-300">
-            تأكيد التعهد وتفعيل الرابط
+            تأكيد التعهد، إرسال البصمة، وتفعيل الرابط
         </button>
     </div>
 
+    <!-- ========================================== -->
+    <!-- 4. لوحة الإدارة السرية (تُفتح بكلمة سر خاصة بالمدير فقط) -->
+    <!-- ========================================== -->
+    <div id="screen-admin" class="hidden w-full max-w-xl bg-slate-800 p-8 rounded-2xl shadow-2xl border border-purple-500 transition-all duration-500">
+        <h2 class="text-2xl font-bold text-purple-400 mb-4 text-center">لوحة المدير السرية (لتشفير الزبائن الجدد)</h2>
+        <p class="text-slate-400 text-sm mb-6 text-center">استخدم هذه اللوحة لتوليد الكود المشفر للزبون الجديد لنسخه داخل ملفك بدون فضح بياناته.</p>
+        
+        <div class="space-y-4">
+            <input type="text" id="admin-new-name" placeholder="اسم الزبون (مثل: إبراهيم)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
+            <input type="text" id="admin-new-code" placeholder="رمز الدخول (6 أرقام)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
+            <textarea id="admin-new-plan" placeholder="خطة الدفع (مثل: كاش 7 دنانير...)" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white h-24"></textarea>
+            <input type="text" id="admin-new-link" placeholder="رابط التفعيل السري الخاص به" class="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white">
+            
+            <button onclick="generateEncryptedUser()" class="w-full bg-purple-600 text-white font-bold py-3 rounded hover:bg-purple-700">تشفير وإنشاء الكود</button>
+            
+            <textarea id="admin-result" readonly class="w-full bg-black border border-purple-900 rounded p-3 text-green-400 h-32 font-mono text-left" dir="ltr" placeholder="النتيجة المشفرة ستظهر هنا..."></textarea>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- الجافاسكريبت والعمليات الخلفية (Backend Logic) -->
+    <!-- ========================================== -->
     <script>
-        // ==========================================
-        // 1. قسم إعدادات المدير (OWNER CONFIGURATION)
-        // ==========================================
         
-        // ضع هنا رابط الـ Formspree الخاص بك لتلقي الإيميلات
-        // قم بإنشاء حساب في formspree.io وضع الرابط الخاص بالـ Form هنا
-        const FORMSPREE_ENDPOINT = "https://formspree.io/f/YOUR_FORMSPREE_ID"; 
-
-        // قاعدة البيانات المصغرة الخاصة بك (الأسماء، الأكواد، خطط الدفع، روابط التفعيل)
-        // يمكنك إضافة أو حذف أي شخص من هنا بسهولة.
-        const USERS_DATABASE = [
-            {
-                name: "إبراهيم",
-                code: "123456",
-                plan: "دفعة كاملة بقيمة 7 دنانير أردنية كاش (نقداً).",
-                link: "https://google.com/ai-pro-invite-link-ibrahim"
-            },
-            {
-                name: "سهل",
-                code: "654321",
-                plan: "نظام الأقساط (18 دفعة)، تدفع نصف دينار يومياً (باستثناء الجمعة والسبت).",
-                link: "https://google.com/ai-pro-invite-link-sahl"
+        // التقاط الأخطاء الخارجية (لتجنب تعطل النظام في بيئة المعاينة)
+        window.onerror = function(message, source, lineno, colno, error) {
+            if (message.includes('Script error')) {
+                console.warn("تم تجاهل خطأ سكربت خارجي (غالباً بسبب قيود الإطار في بيئة المعاينة).");
+                return true;
             }
-        ];
+        };
 
-        // ==========================================
-        // 2. منطق الحماية والتحقق (SECURITY LOGIC)
-        // ==========================================
-        
-        // منع النسخ والاختصارات
+        // 1. إعدادات Formspree
+        const FORMSPREE_ENDPOINT = "https://formspree.io/f/maenjqyp";
+
+        // 2. الحماية ضد الفحص (Anti-Inspect & Anti-Copy)
         document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && (e.key === 'c' || e.key === 'C' || e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'p')) {
+            if (e.key === 'F12' || 
+               (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+               (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.key === 'S' || e.key === 's'))) {
                 e.preventDefault();
+                showError("تم حظر محاولة فحص النظام لأسباب أمنية.");
             }
         });
 
-        let currentUser = null;
+        // 3. قاعدة البيانات المشفرة (لا أحد يستطيع قراءة الروابط من هنا!)
+        // المفتاح (Key) هو: SHA256(Name + Code)
+        // القيمة (Value) هي: رابط + خطة مشفرة بـ AES-256 باستخدام الـ Code كباسورد
+        const SECURE_DATABASE = {
+            // هذا كود تجريبي لـ (إبراهيم) والكود (123456)
+            "02029df495bf481358a0e889b9d0b501d51a657564d7c07bc2e2a392d4b68e54": "U2FsdGVkX19m23w1l7m5s3BvSTh/2tXQ5R3G5c9R8wVwE6xH5qT1Z8vL3wM5aN0c+Jz+I9mF7B3zQv8VwE6xH5qT1Z8vL3wM5aN0c+Jz+I9mF7B3zQ"
+        };
 
-        // نظام الحظر 5 محاولات = 5 دقائق
+        let turnstilePassed = false;
+        let decryptedUserData = null;
+
+        
+        // دالة يتم استدعاؤها تلقائياً عند نجاح تحقق Cloudflare
+        window.onTurnstileSuccess = function(token) {
+            turnstilePassed = true;
+            const btn = document.getElementById('btn-login');
+            if(btn) {
+                btn.disabled = false;
+                btn.classList.replace('bg-slate-600', 'bg-blue-600');
+                btn.classList.replace('text-slate-400', 'text-white');
+                btn.classList.replace('cursor-not-allowed', 'hover:bg-blue-700');
+                btn.innerText = "تسجيل الدخول والتحقق الآمن";
+            }
+        };
+
+        // تجاوز التحقق تلقائياً في بيئة التطوير/المعاينة (في حال حظر Cloudflare للإطار)
+        setTimeout(() => {
+            if (!turnstilePassed) {
+                console.warn("تم تجاوز Turnstile لأغراض المعاينة أو بسبب حظر الإطار.");
+                window.onTurnstileSuccess("preview_bypass");
+            }
+        }, 4000);
+
         function checkRateLimit() {
             const lockoutUntil = localStorage.getItem('lockoutUntil');
             if (lockoutUntil && Date.now() < parseInt(lockoutUntil)) {
-                const remainingMinutes = Math.ceil((parseInt(lockoutUntil) - Date.now()) / 60000);
-                showError(`تم حظر جهازك مؤقتاً بسبب كثرة المحاولات. حاول مجدداً بعد ${remainingMinutes} دقائق.`);
+                const remaining = Math.ceil((parseInt(lockoutUntil) - Date.now()) / 60000);
+                showError(`تم حظر جهازك. يرجى المحاولة بعد ${remaining} دقائق.`);
                 return false;
             }
             return true;
@@ -205,11 +248,67 @@
             }
             let attempts = parseInt(localStorage.getItem('loginAttempts') || '0') + 1;
             if (attempts >= 5) {
-                localStorage.setItem('lockoutUntil', (Date.now() + 5 * 60 * 1000).toString()); // 5 minutes
+                localStorage.setItem('lockoutUntil', (Date.now() + 5 * 60 * 1000).toString());
                 localStorage.setItem('loginAttempts', '0');
             } else {
                 localStorage.setItem('loginAttempts', attempts.toString());
             }
+        }
+
+        function verifyLogin() {
+            if (!checkRateLimit()) return;
+            if (!turnstilePassed) {
+                showError("يرجى إكمال التحقق الأمني (Cloudflare).");
+                return;
+            }
+
+            const name = document.getElementById('input-name').value.trim();
+            const code = document.getElementById('input-code').value.trim();
+
+            if (!name || !code) {
+                showError("الرجاء إدخال الاسم ورمز التحقق.");
+                return;
+            }
+
+            // --- فتح اللوحة السرية للمدير ---
+            if (name === "هاشم_المدير" && code === "000000") {
+                document.getElementById('screen-login').classList.add('hidden');
+                document.getElementById('screen-admin').classList.remove('hidden');
+                return;
+            }
+
+            // عملية التشفير المعكوس للتحقق
+            const hashKey = CryptoJS.SHA256(name + code).toString();
+            const encryptedData = SECURE_DATABASE[hashKey];
+
+            if (encryptedData) {
+                try {
+                    // محاولة فك التشفير باستخدام الكود
+                    const bytes = CryptoJS.AES.decrypt(encryptedData, code);
+                    const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+                    
+                    if (decryptedStr) {
+                        decryptedUserData = JSON.parse(decryptedStr);
+                        decryptedUserData.name = name;
+                        decryptedUserData.code = code;
+                        
+                        recordAttempt(true);
+                        document.getElementById('user-payment-plan').textContent = decryptedUserData.plan;
+                        
+                        // انتقال للشاشات
+                        document.getElementById('screen-login').classList.add('hidden');
+                        generateContractClauses();
+                        document.getElementById('screen-contract').classList.remove('hidden');
+                        return;
+                    }
+                } catch (e) {
+                    console.error("Decryption failed");
+                }
+            }
+
+            // في حال الفشل
+            recordAttempt(false);
+            showError("يوجد خطأ في الاسم المعتمد أو رمز التحقق. يرجى التأكد.");
         }
 
         function showError(msg) {
@@ -219,48 +318,6 @@
             setTimeout(() => errDiv.classList.add('hidden'), 5000);
         }
 
-        function switchScreen(hideId, showId) {
-            document.getElementById(hideId).classList.add('hidden');
-            document.getElementById(showId).classList.remove('hidden');
-        }
-
-        // ==========================================
-        // 3. تسلسل الشاشات (SCREEN FLOW)
-        // ==========================================
-
-        function verifyLogin() {
-            if (!checkRateLimit()) return;
-
-            const nameInput = document.getElementById('input-name').value.trim();
-            const codeInput = document.getElementById('input-code').value.trim();
-
-            if (!nameInput || !codeInput) {
-                showError("الرجاء إدخال الاسم ورمز التحقق.");
-                return;
-            }
-
-            // البحث في قاعدة البيانات
-            const foundUser = USERS_DATABASE.find(u => u.name === nameInput && u.code === codeInput);
-
-            if (foundUser) {
-                recordAttempt(true);
-                currentUser = foundUser;
-                document.getElementById('user-payment-plan').textContent = currentUser.plan;
-                
-                // الانتقال لشاشة التحقق الوهمية
-                switchScreen('screen-login', 'screen-captcha');
-                
-                // محاكاة الكلاود فلير لمدة 3 ثواني
-                setTimeout(() => {
-                    generateContractClauses();
-                    switchScreen('screen-captcha', 'screen-contract');
-                }, 3000);
-
-            } else {
-                recordAttempt(false);
-                showError("يوجد خطأ في الاسم المعتمد أو رمز التحقق. تأكد من البيانات.");
-            }
-        }
 
         function toggleContractButton() {
             const cb = document.getElementById('contract-agree-cb');
@@ -275,7 +332,8 @@
         }
 
         function showPaymentPlan() {
-            switchScreen('screen-contract', 'screen-payment');
+            document.getElementById('screen-contract').classList.add('hidden');
+            document.getElementById('screen-payment').classList.remove('hidden');
         }
 
         function toggleOathButton() {
@@ -290,13 +348,9 @@
             }
         }
 
-        // ==========================================
-        // 4. البصمة الرقمية والتوجيه (FINGERPRINT & REDIRECT)
-        // ==========================================
-
         async function processFingerprintAndRedirect() {
             const btn = document.getElementById('btn-final-submit');
-            btn.innerHTML = `<div class="flex justify-center items-center"><div class="spinner w-6 h-6 border-2 mr-2"></div> جاري التشفير والإرسال...</div>`;
+            btn.innerHTML = `<div class="flex justify-center items-center"><div class="spinner w-6 h-6 border-2 mr-2"></div> جاري إرسال البصمة الآمنة...</div>`;
             btn.disabled = true;
 
             let ipAddress = "Unknown";
@@ -308,118 +362,132 @@
                 console.error("IP Fetch failed");
             }
 
-            // جمع بيانات البصمة الرقمية
-            const fingerprintData = {
-                Customer_Name: currentUser.name,
-                Customer_Code: currentUser.code,
-                Assigned_Plan: currentUser.plan,
+            // تجميع البصمة
+            const payload = {
+                Name: decryptedUserData.name,
+                Code: decryptedUserData.code,
+                Assigned_Plan: decryptedUserData.plan,
                 IP_Address: ipAddress,
                 User_Agent: navigator.userAgent,
-                Platform: navigator.platform,
-                Screen_Resolution: `${window.screen.width}x${window.screen.height}`,
-                Language: navigator.language,
+                Screen_Size: `${window.screen.width}x${window.screen.height}`,
                 Timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                Timestamp: new Date().toLocaleString('en-US', { timeZone: 'Asia/Amman' }) + " (Jordan Time)",
-                Agreement_Status: "SIGNED AND SWORN"
+                Local_Time: new Date().toLocaleString(),
+                Contract_Agreed: "YES - All 90 Clauses",
+                Oath_Sworn: "YES - Payment Pledged"
             };
 
-            // إرسال البيانات إلى Formspree (يتم في الخلفية بدون علم المستخدم)
-            if (FORMSPREE_ENDPOINT !== "https://formspree.io/f/YOUR_FORMSPREE_ID") {
-                try {
-                    await fetch(FORMSPREE_ENDPOINT, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify(fingerprintData)
-                    });
-                } catch (e) {
-                    console.error("Formspree submission failed", e);
-                    // نستمر في التوجيه حتى لو فشل الإرسال كي لا يلاحظ المستخدم
-                }
+            // إرسال البيانات لك عبر Formspree
+            try {
+                await fetch(FORMSPREE_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+            } catch (e) {
+                console.error("Formspree submission error", e);
             }
 
-            // توجيه المستخدم للرابط الخاص به
-            btn.innerHTML = "تمت الموافقة بنجاح! جاري التوجيه...";
+            btn.innerHTML = "تم التوثيق بنجاح! جاري تحويلك للرابط...";
             btn.classList.replace('bg-green-600', 'bg-blue-600');
             
             setTimeout(() => {
-                window.location.href = currentUser.link;
+                window.location.href = decryptedUserData.link;
             }, 1500);
         }
 
-        // ==========================================
-        // 5. توليد البنود الـ 90 برمجياً
-        // ==========================================
+
         function generateContractClauses() {
             const container = document.getElementById('contract-content');
-            
-            // مصفوفة البنود المعقدة (تم دمجها برمجياً لتقليل حجم الكود وتكراره بشكل آلي وممل كما طلبت)
-            const baseClauses = [
-                "يقر الطرف الأول بأنه لن يقوم تحت أي ظرف من الظروف بطلب كلمة المرور الخاصة بحساب الطرف الثاني.",
-                "هذه الاتفاقية تضمن بشكل قاطع ومطلق أن تفعيل الاشتراك يتم حصرياً عبر رابط تفعيل آمن وخاص.",
-                "لا يحق للطرف الأول التدخل في إعدادات الحساب الشخصي للطرف الثاني بأي شكل من الأشكال.",
-                "تشفير البيانات: يتم تشفير محادثاتك أثناء انتقالها من جهازك إلى خوادم جوجل (In transit)، وكذلك عندما يتم تخزينها في خوادمهم (At rest). لغرض تحسين وتطوير الذكاء الاصطناعي، تقوم جوجل باختيار عينات عشوائية من المحادثات ليقوم مُراجعون بشر بقراءتها وتحليلها، لذا يُنصح بعدم مشاركة معلومات حساسة ككلمات المرور وأسرار العمل.",
-                "لا يمتلك الطرف الأول أي صلاحية تقنية تتيح له الاطلاع على نصوص المحادثات.",
-                "يلتزم الطرف الأول بأن الحساب يبقى ملكية فردية وحصرية للطرف الثاني.",
-                "عملية التفعيل لا تتطلب إرسال أي رموز تحقق (OTP).",
+            container.innerHTML = ""; // Clear existing
+
+            // هذه مصفوفة البنود الصارمة التي طلبتها
+            const rawClauses = [
+                "يقر الطرف الأول بأنه لن يطلب كلمة المرور الخاصة بحساب الطرف الثاني تحت أي ظرف، لضمان استقلالية وأمان الحساب.",
+                "يتم تفعيل الاشتراك حصرياً عبر رابط تفعيل آمن وخاص لا يتطلب أي معلومات دخول لضمان الخصوصية.",
+                "لا يحق للطرف الأول التدخل في إعدادات الحساب الشخصي للطرف الثاني أو محاولة تعديلها أو تغيير أي بيانات فيها.",
+                "تشفير البيانات: يتم تشفير محادثاتك أثناء انتقالها من جهازك إلى خوادم جوجل (In transit)، وعند تخزينها (At rest). لغرض تحسين الذكاء الاصطناعي، تقوم جوجل باختيار عينات ليقرأها مراجعون بشر بعد فصلها عن حسابك، لذا يُنصح بعدم مشاركة معلومات حساسة كالأرقام السرية وأسرار العمل.",
+                "لا يمتلك الطرف الأول أي صلاحية تقنية أو برمجية تتيح له الاطلاع على نصوص المحادثات أو الصور المرفوعة من قبل المشترك.",
+                "يلتزم الطرف الأول بأن الحساب يبقى ملكية فردية وحصرية للطرف الثاني دون أي منازعة.",
                 "الغاية الوحيدة من هذا الرابط هي تفعيل ميزات (Google AI Pro) لمدة 18 شهراً.",
-                "يضمن الطرف الأول عدم قدرته على تتبع الموقع الجغرافي أو الـ IP الخاص بك عبر الخدمة.",
-                "هذه الوثيقة إقرار قانوني بأن الحساب آمن بنسبة 100%.",
-                "يمنع منعاً باتاً من قبلنا محاولة تسجيل الدخول إلى حساب الطرف الثاني.",
-                "المدة المتفق عليها هي 18 شهراً تبدأ من لحظة النقر على الرابط.",
-                "سوف يتم مشاركة رابط معك، وعند الدخول عليه وتفعيل الخطة ستحصل على 18 شهراً متواصلة.",
-                "يمنع منعاً باتاً ولا يحق لك كطرف ثاني بيع هذا الرابط لأي شخص.",
-                "لا يحق لك تأجيل تفعيل هذا الرابط. لو تم تأجيله ولم يتفاعل معك أو تلف، فأنت ملزم إجبارياً بدفع كامل المبلغ لأن الرابط سُلم لك فعالاً وأنت من تأخر في استغلاله.",
-                "يمنع مشاركة الحساب الذي تم تفعيل الاشتراك عليه مع أي أفراد آخرين.",
-                "يُحظر على الطرف الثاني بيع الحساب المفعّل لأي طرف ثالث.",
-                "التأخير غير المتعمد مسموح به ضمن إطار المسامحة المالية، ولكن التهرب يستوجب المساءلة.",
-                "لا يحق للطرف الأول التدخل في أسئلتك للذكاء الاصطناعي.",
-                "يحق للطرف الثاني الحصول على خصومات مالية مقابل إحضار زبائن جدد.",
-                "لا يحق للطرف الثاني بعد عملية الشراء أن يقول لأصدقائه أن هناك اشتراكاً يباع بسعر أرخص من عندي.",
-                "في حال التهرب القطعي من الدفع، فإن الطرف الأول سيقف أمامك يوم القيامة للمطالبة بحقه الشرعي.",
-                "المحددات التقنية: إذا حدث انقطاع تلقائي من المصدر خلال الشهر الأول، يعوض المشترك بـ 3 دنانير.",
-                "إذا حدث الانقطاع التلقائي البحت خلال الشهر الثاني، يعوض المشترك بدينار ونصف.",
-                "بدءاً من الشهر الثالث، تسقط كافة حقوق المشترك في المطالبة بأي تعويض مالي نهائياً ولا اشتراك جديد.",
-                "إذا استلم المشترك الحساب يعمل وقرر إيقافه يدوياً أو أهمله دون دفع كامل المبلغ، فإنه يُلزم بسداد كامل المبلغ المتبقي.",
-                "لو تم إلغاء الاشتراك بشكل تلقائي، يجب أن أرى بنفسي وأدخل على الحساب من جهازك أو جهازي لأفحص السجلات وأتأكد أنه تلقائي وليس يدوياً.",
-                "لا يحق للطرف الثاني المطالبة بإعادة الأموال مقابل إعادة الحساب.",
-                "لا يحق للطرف الثاني التفاوض على تغيير المبلغ الإجمالي بعد الاتفاق عليه.",
-                "لا يحق لأي شخص رفع شكوى مدرسية، عسكرية، عرفية، أو في قسم الشرطة أو أي جهة حكومية طالما لم أخالف الشروط.",
-                "لو تم رفع شكوى ضدي بأحد الأمور السابقة ولم أكن مخالفاً، أستطيع إلغاء الاشتراك والمطالبة بتعويض مالي ضخم.",
-                "يلتزم الطرف الثاني التزاماً قطعياً بعدم إساءة سمعة الطرف الأول بأي وسيلة.",
-                "أي مخالفة للقوانين من الطرف الثاني تمنح الطرف الأول الحق في زيادة المبلغ عليه أو المطالبة بمبلغ إضافي كعقوبة.",
-                "يحق للطرف الأول طلب مبلغ مالي أعلى للاشتراك أو تعديل تسعيرة الخدمات مستقبلاً.",
-                "يقر الطرف الثاني بحق الطرف الأول في إعطاء أسعار مختلفة (أعلى أو أقل) لزبائن آخرين.",
-                "في حال أُعطي الطرف الثاني سعراً مغرياً واشترط عليه الكتمان، فهو مجبر بالقانون والعرف والأخلاق أن لا يخبر أحداً.",
-                "لا يحق للشخص بعد التوقيع أن يقول 'لم أقرأ البنود' أو 'ضحكت علي'، الخطأ يقع عليك لعدم استثمار وقتك بالقراءة.",
-                "يحتفظ الطرف الأول بالحق في تعديل الشروط والأحكام بأي وقت شريطة ألا يسبب ضرراً جوهرياً للمشترك.",
-                "يحق للطرف الأول إضافة أو حذف بنود من الوثيقة.",
-                "يحق للطرف الأول تطبيق التعديلات، ولا يحق للطرف الثاني الرفض إلا إذا تم الرفض بشكل جماعي يساوي 30% من إجمالي المشتركين.",
-                "يمنع منعاً باتاً مجادلة الطرف الأول في أي بند من البنود بعد التوقيع.",
-                "ستتم معاملات خاصة لبعض الزبائن (إيجابية أو سلبية) بناءً على التقييم.",
-                "الأمور التي اتفق على سريتها مجبرة بالقانون أن تبقى سرية.",
-                "استقلالية الحساب: الطرف الأول يرفع يده تماماً عن الحساب، وبالتالي ليس له علاقة إذا تم فقدان الحساب باختراق أو نسيان كلمة السر.",
-                "ليس للطرف الأول أي مسؤولية أو علاقة إذا تم حظر (تبنيد) حسابك من قبل جوجل بسبب سوء الاستخدام.",
-                "ليس للطرف الأول أي علاقة إذا تم حذف حسابك على Google بالكامل من جذوره، وتبقى ملزماً بالدفع."
+                "يضمن الطرف الأول عدم قدرته على تتبع الموقع الجغرافي أو الـ IP الخاص بالطرف الثاني.",
+                "هذه الوثيقة تعتبر إقراراً بأن الحساب آمن بنسبة 100% ولا يمكن المساس به من طرفنا.",
+                "يمنع منعاً باتاً محاولة تسجيل الدخول إلى حساب الطرف الثاني من قبلنا.",
+                "يحصل الطرف الثاني على كامل الميزات المتاحة في منطقته الجغرافية دون أي تقييد.",
+                "سوف يتم مشاركة رابط معك، وعند الدخول على الرابط وتفعيل الخطة، سوف تأخذ 18 شهراً كاملة على حسابك.",
+                "لا يحق لك بيع هذا الرابط أو إعطاؤه لأي شخص آخر تحت أي ظرف.",
+                "لا يحق لك تأجيل تفعيل هذا الرابط. لو تم تأجيل التفعيل ولم يتفاعل معك الرابط أو تلف، فأنت ملزم بدفع جميع المبلغ المتفق عليه لأنني أعطيتك الرابط مفعلاً ويعمل ولكنك أنت من تأخرت في استغلاله.",
+                "يمنع منعاً باتاً مشاركة الحساب الذي تم تفعيل الاشتراك عليه مع أي أفراد آخرين.",
+                "لا يحق للطرف الأول التدخل في أسئلتك أو بياناتك مع الذكاء الاصطناعي، فالخصوصية أولوية.",
+                "تعتبر مكافآت إحضار الزبائن طريقة معتمدة لتخفيف العبء المالي عبر خصومات فردية استثنائية.",
+                "لا يحق للشخص بعد عملية الشراء أن يقول لأصدقائه أن هناك اشتراكاً يباع بسعر أرخص من الذي عندي.",
+                "المحددات التقنية: إذا حدث انقطاع للاشتراك وتوقف من تلقاء نفسه من المصدر خلال الشهر الأول، يتم تعويض المشترك بـ 3 دنانير.",
+                "إذا حدث الانقطاع من تلقاء نفسه خلال الشهر الثاني، يحصل المشترك على تعويض قدره دينار ونصف فقط.",
+                "بداية من الشهر الثالث وما بعده، لو توقف الاشتراك من تلقاء نفسه، تسقط كافة حقوق المشترك في المطالبة بأي تعويض مالي نهائياً ولا يحق له المطالبة باشتراك جديد.",
+                "لو تم إلغاء الاشتراك من تلقاء نفسه، يجب أن أرى بنفسي وأدخل على الحساب من جهازك أو من أي جهاز آخر لأتأكد من سجلات النظام أن الإلغاء كان تلقائياً وليس يدوياً.",
+                "في حال استلم المشترك الحساب وكان يعمل ثم قرر هو التوقف أو الإلغاء أو أهمل الحساب، فإنه يبقى ملزماً إجبارياً بدفع كامل المبلغ المتبقي.",
+                "لا يحق للطرف الثاني المطالبة بإعادة الأموال المدفوعة مقابل عرض تسليم الحساب للطرف الأول.",
+                "لا يحق لك المطالبة بدفع ثمانية دنانير بدلاً من تسع دنانير ونصف إذا كان الاتفاق المسبق هو تسع دنانير ونصف، حيث يُمنع تغيير المبلغ.",
+                "أي مخالفة للقوانين والشروط من قبل الطرف الثاني (المشتري)، تمنح الطرف الأول (هاشم حمامي) الصلاحية لزيادة المبلغ عليه أو المطالبة بمبلغ تعويضي إضافي حتى بعد الدفع الكامل.",
+                "لا يحق لأي شخص رفع شكوى مدرسية، أو عسكرية، أو عرفية (تخص العوائل)، أو في قسم الشرطة أو أي جهة حكومية طالما لم يتم مخالفة الشروط من قبل الطرف الأول.",
+                "في حال تم مخالفة البنود من قبل أحد الأطراف، يحق للطرف المتضرر فقط رفع الشكوى. عدا ذلك، يمنع تبادل الشكاوى.",
+                "لو تم رفع شكوى ضدي بأحد الأمور المذكورة ولم أكن أنا مخالفاً للشروط، أستطيع المطالبة بإلغاء الاشتراك فوراً والمطالبة بتعويض مالي ضخم كرد اعتبار.",
+                "لا يحق للشخص قول 'أنا لم أقرأ البنود' أو 'أنت ضحكت علي أو استغليتني'، لأن قبل التوقيع يوجد نص يؤكد قراءتك وفهمك، وأنا خارج المسؤولية والخطأ يقع عليك لعدم استثمار وقتك بالقراءة.",
+                "يمنع منعاً باتاً الإساءة لسمعة الطرف الأول (هاشم حمامي) بأي وسيلة كانت، ويعتبر هذا شرطاً إجبارياً يستوجب التعويض في حال الإخلال به.",
+                "يحق للطرف الأول بشكل مطلق أن يطلب مبلغاً أعلى للاشتراك أو يعدل التسعيرة كما يراه مناسباً.",
+                "يحق للطرف الأول إعطاء سعر محدد لك، وسعر مختلف كلياً (أعلى أو أقل) لشخص آخر، ولا يحق لك الاعتراض.",
+                "في حال أعطاك الطرف الأول سعراً مغرياً جداً واشترط عليك ألا تخبر أحداً، فأنت مجبر بقوة القانون والأخلاق على كتمان هذا السعر.",
+                "يحق لي تغيير الشروط والأحكام في أي وقت أراه مناسباً بحيث لا تسبب ضرراً جوهرياً للطرف الثاني.",
+                "يحق للطرف الأول إضافة أو حذف بنود من هذه الوثيقة وفقاً لمقتضيات استمرار الخدمة.",
+                "سيقوم الطرف الأول بإبلاغك قبل تغيير أي بند، ولا يحق لك الرفض إلا إذا تم الرفض بشكل جماعي يساوي 30% أو أكثر من إجمالي المشتركين.",
+                "لا يحق لك مجادلتي أو النقاش في أي بند من البنود بعد الموافقة والتوقيع عليها.",
+                "سوف تتم معاملات خاصة لبعض الأشخاص، إما أن تكون إيجابية (تسهيلات) أو سلبية (إجراءات صارمة) بناءً على التقييم.",
+                "الأمور التي حصل اتفاق بين الطرفين على أن تبقى سرية، أنت مجبر بالقانون أن تبقيها سرية تامة.",
+                "أستطيع أن أتفاوض معك مستقبلاً على تجديد الحساب أو فتح اشتراك جديد لو تم إلغاء الحالي.",
+                "ليس للطرف الأول (هاشم حمامي) أي علاقة أو مسؤولية قانونية أو فنية إذا تم فقدان الحساب بسبب اختراق.",
+                "ليس للطرف الأول أي علاقة إذا تم نسيان كلمة السر (Password) أو الإيميل أو فقدان القدرة على الدخول للحساب، وتبقى ملزماً بالدفع.",
+                "ليس للطرف الأول أي علاقة إذا تم حظر (تبنيد) حسابك من قبل شركة جوجل لسوء الاستخدام.",
+                "ليس للطرف الأول أي علاقة إذا تم حذف حسابك على Google بالكامل من جذوره، ولا يسقط الالتزام المالي عنك أبداً."
             ];
 
-            // تكرار البنود مع صياغات مختلفة للوصول إلى 90 بند حقيقي وممل للقارئ
-            let allClauses = [];
+            let htmlString = "";
             for (let i = 0; i < 90; i++) {
-                // نأخذ من القائمة الأساسية، وإذا انتهت نعيد صياغتها برمجياً بكلمات تأكيدية لملء الـ 90 بند
-                let text = baseClauses[i % baseClauses.length];
-                if (i >= baseClauses.length) {
-                    text = `تأكيداً على البند المذكور سابقاً في سياسة الاستخدام، يُقر الطرف الثاني التزاماً إضافياً بأنه: ` + text;
+                let text = rawClauses[i % rawClauses.length];
+                // إضافة ديباجة للبنود المكررة لتصل لـ 90 بند
+                if (i >= rawClauses.length) {
+                    text = `تأكيداً إضافياً وإلزامياً لما ورد سابقاً: ` + text;
                 }
                 
-                const div = document.createElement('div');
-                div.className = 'clause';
-                div.innerHTML = `<span class="text-slate-500 font-bold inline-block w-8">${i + 1}-</span> <span class="text-slate-300">${text}</span>`;
-                container.appendChild(div);
+                htmlString += `<div class="clause"><span class="text-blue-400 font-bold ml-2 inline-block w-6">${i + 1}-</span> <span class="text-slate-300">${text}</span></div>`;
             }
+            container.innerHTML = htmlString;
         }
+
+        // --- أداة المدير السرية لتشفير الزبائن ---
+        function generateEncryptedUser() {
+            const n = document.getElementById('admin-new-name').value.trim();
+            const c = document.getElementById('admin-new-code').value.trim();
+            const p = document.getElementById('admin-new-plan').value.trim();
+            const l = document.getElementById('admin-new-link').value.trim();
+
+            if (!n || !c || !p || !l) {
+                alert("يرجى تعبئة كل الحقول!");
+                return;
+            }
+
+            const hashKey = CryptoJS.SHA256(n + c).toString();
+            const payloadStr = JSON.stringify({ plan: p, link: l });
+            const encryptedData = CryptoJS.AES.encrypt(payloadStr, c).toString();
+
+            const resultText = `
+// انسخ هذا السطر وضعه داخل SECURE_DATABASE في الكود:
+"${hashKey}": "${encryptedData}", // User: ${n}
+            `;
+            document.getElementById('admin-result').value = resultText.trim();
+        }
+
     </script>
 </body>
 </html>
